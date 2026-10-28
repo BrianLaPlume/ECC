@@ -149,6 +149,21 @@ function oversizedToolPayload(toolName, toolInput) {
   return JSON.stringify({ session_id: 'trunc', tool_name: toolName, tool_input: toolInput, pad: 'p'.repeat(MAX_STDIN + 2048) });
 }
 
+// Pin every switch that decides whether the hook runs, so an inherited
+// ECC_DISABLED_HOOKS / profile / cap cannot make these pass or fail by accident.
+const GATEGUARD_ENV_BASELINE = {
+  CLAUDE_PLUGIN_ROOT: repoRoot,
+  ECC_HOOK_CONFIG: path.join(repoRoot, 'tests', 'fixtures', 'no-such-hook-config.json'),
+  ECC_HOOKS_ENABLED: 'true',
+  ECC_HOOK_PROFILE: 'standard',
+  ECC_DISABLED_HOOKS: '',
+  ECC_DRY_RUN: '',
+  ECC_HOOK_INPUT_MAX_BYTES: String(MAX_STDIN),
+  ECC_HOOK_INPUT_TRUNCATED_UPSTREAM: '',
+  ECC_GATEGUARD: '',
+  GATEGUARD_DISABLED: ''
+};
+
 const GATEGUARD_TRUNCATION_CASES = [
   ['pre:bash:gateguard-fact-force', 'Bash', { command: 'git reset --hard' }],
   ['pre:edit-write:gateguard-fact-force', 'Edit', { file_path: '/tmp/a.py', old_string: 'a', new_string: 'b' }],
@@ -158,10 +173,7 @@ const GATEGUARD_TRUNCATION_CASES = [
 for (const [hookId, toolName, toolInput] of GATEGUARD_TRUNCATION_CASES) {
   if (
     test(`${hookId} fails closed on an oversized payload (#3762)`, () => {
-      const result = runRunner([hookId, 'scripts/hooks/gateguard-fact-force.js', 'standard,strict'], oversizedToolPayload(toolName, toolInput), {
-        ECC_GATEGUARD: '',
-        GATEGUARD_DISABLED: ''
-      });
+      const result = runRunner([hookId, 'scripts/hooks/gateguard-fact-force.js', 'standard,strict'], oversizedToolPayload(toolName, toolInput), GATEGUARD_ENV_BASELINE);
       assert.strictEqual(result.status, 2, `expected block exit 2, got ${result.status}: ${result.stderr}`);
       assert.ok(result.stderr.includes(`could not safely inspect`), result.stderr);
       assert.strictEqual(result.stdout, '', 'blocked truncated payload must not echo raw input');
@@ -174,8 +186,7 @@ for (const [hookId, toolName, toolInput] of GATEGUARD_TRUNCATION_CASES) {
     if (
       test(`${hookId} oversized payload passes when GateGuard is off via ${Object.keys(offEnv)[0]}`, () => {
         const result = runRunner([hookId, 'scripts/hooks/gateguard-fact-force.js', 'standard,strict'], oversizedToolPayload(toolName, toolInput), {
-          ECC_GATEGUARD: '',
-          GATEGUARD_DISABLED: '',
+          ...GATEGUARD_ENV_BASELINE,
           ...offEnv
         });
         assert.strictEqual(result.status, 0, `expected exit 0 with GateGuard off, got ${result.status}: ${result.stderr}`);
