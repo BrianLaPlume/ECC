@@ -494,6 +494,19 @@ function runTests() {
         });
         assert.strictEqual(mixed.code, 2, 'mixed ordinary/config batch should be blocked: ' + mixed.stderr);
         assert.ok(mixed.stderr.includes('BLOCKED: Modifying .eslintrc.json is not allowed.'), mixed.stderr);
+
+        const missingThenExisting = runHook({
+          tool_name: 'MultiEdit',
+          tool_input: {
+            file_path: path.join(tmpDir, 'missing', 'ruff.toml'),
+            edits: [
+              { old_string: '', new_string: '[lint]' },
+              { file_path: eslintrc, old_string: '{}', new_string: '{ }' }
+            ]
+          }
+        });
+        assert.strictEqual(missingThenExisting.code, 2, 'existing config after a missing one should be blocked: ' + missingThenExisting.stderr);
+        assert.ok(missingThenExisting.stderr.includes('BLOCKED: Modifying .eslintrc.json is not allowed.'), missingThenExisting.stderr);
       });
     })
   );
