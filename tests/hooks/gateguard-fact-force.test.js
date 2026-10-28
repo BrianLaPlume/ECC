@@ -692,7 +692,11 @@ function runDdRegressionTests() {
       'sudo -c login rm -rf build',
       'sudo FOO=1 -u root rm -rf build',
       'sudo -E FOO=1 BAR=2 -u root git reset --hard',
-      'sudo -Rl rm -rf build'
+      'sudo -Rl rm -rf build',
+      'sudo --use root rm -rf build',
+      'sudo --chro /live rm -rf build',
+      'sudo --chro=/live git reset --hard',
+      'sudo --login-c staff rm -rf build'
     ];
     const wrappedRmGitPassive = [
       'sudo rm build',
@@ -708,7 +712,9 @@ function runDdRegressionTests() {
       'sudo -e rm -rf build',
       'doas -L rm -rf build',
       'doas -C /tmp/doas.conf rm -rf build',
-      'sudo FOO=1 -l rm -rf build'
+      'sudo FOO=1 -l rm -rf build',
+      'sudo --lis rm -rf build',
+      'sudo --vali rm -rf build'
     ];
     for (const [commands, expected] of [
       [wrappedRmGitDestructive, ['gateguard.bash-compatible-destructive']],

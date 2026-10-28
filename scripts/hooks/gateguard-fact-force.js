@@ -531,6 +531,7 @@ const DOAS_BOOLEAN_FLAGS = new Set(['-L', '-n', '-s']);
 // the command operand: `sudo -l rm -rf x` only checks whether rm is permitted.
 const SUDO_NON_EXEC_FLAGS = new Set([
   '-l', '--list', '-v', '--validate', '-K', '--remove-timestamp', '-V', '--version', '-e', '--edit',
+  '--help',
 ]);
 const DOAS_NON_EXEC_FLAGS = new Set(['-L', '-C']);
 
@@ -552,6 +553,31 @@ function isNonExecPrivilegeOption(arg, valueFlags, nonExecFlags, booleanFlags) {
     if (valueFlags.has(name) || !booleanFlags.has(name)) return false;
   }
   return false;
+}
+
+// Every sudo long option (parse_args.c sudo_long_opts). getopt_long accepts a
+// unique prefix, so `--use root` is `--user root` and `--chro /x` is `--chroot /x`.
+const SUDO_LONG_OPTIONS = [
+  '--background', '--preserve-env', '--edit', '--set-home', '--login', '--remove-timestamp',
+  '--list', '--preserve-groups', '--shell', '--other-user', '--validate', '--askpass',
+  '--auth-type', '--bell', '--close-from', '--login-class', '--chdir', '--group', '--help',
+  '--host', '--reset-timestamp', '--no-update', '--non-interactive', '--prompt', '--chroot',
+  '--role', '--stdin', '--command-timeout', '--type', '--user', '--version',
+];
+
+/**
+ * Expand a unique sudo long-option prefix to its full name, keeping any
+ * attached `=value`. Exact names, ambiguous prefixes (sudo rejects those with
+ * a usage error and runs nothing) and non-long arguments come back unchanged.
+ */
+function canonicalSudoLongOption(arg) {
+  if (!arg.startsWith('--') || arg === '--') return arg;
+  const separator = arg.indexOf('=');
+  const name = separator === -1 ? arg : arg.slice(0, separator);
+  if (SUDO_LONG_OPTIONS.includes(name)) return arg;
+  const matches = SUDO_LONG_OPTIONS.filter(option => option.startsWith(name));
+  if (matches.length !== 1) return arg;
+  return separator === -1 ? matches[0] : `${matches[0]}${arg.slice(separator)}`;
 }
 
 // sudo accepts VAR=value environment assignments between its options
@@ -838,7 +864,7 @@ function unwrapLeadWrappers(tokens, allowShellBuiltins = true, allowDdLaunchers 
     const booleanFlags = base === 'sudo' ? SUDO_BOOLEAN_FLAGS : DOAS_BOOLEAN_FLAGS;
     index += 1;
     while (index < argv.length) {
-      const flag = argv[index];
+      const flag = base === 'sudo' ? canonicalSudoLongOption(argv[index]) : argv[index];
       if (flag === '--') {
         index += 1;
         break;
