@@ -328,7 +328,6 @@ function runDdRegressionTests() {
     'sudo -D /tmp dd if=input',
     'sudo -- dd if=input',
     'doas -u root dd if=input',
-    'doas -C /tmp/doas.conf dd if=input',
     'env -u FOO dd if=input',
     'env -uFOO dd if=input',
     'env -C /tmp dd if=input',
@@ -547,6 +546,8 @@ function runDdRegressionTests() {
     'env command dd if=input',
     'exec command dd if=input',
     'grep dd if=/dev/zero file',
+    // doas -C checks the config (and command matching) without running it.
+    'doas -C /tmp/doas.conf dd if=input',
     "printf '%s' 'dd if=input'",
     'echo add if=1',
     'echo truncated',
@@ -684,7 +685,14 @@ function runDdRegressionTests() {
       'nohup rm -rf build',
       'exec git reset --hard',
       'sudo -ul rm -rf build',
-      'sudo -k rm -rf build'
+      'sudo -k rm -rf build',
+      'sudo -R/live rm -rf build',
+      'sudo -R /live rm -rf build',
+      'sudo --chroot=/live git reset --hard',
+      'sudo -c login rm -rf build',
+      'sudo FOO=1 -u root rm -rf build',
+      'sudo -E FOO=1 BAR=2 -u root git reset --hard',
+      'sudo -Rl rm -rf build'
     ];
     const wrappedRmGitPassive = [
       'sudo rm build',
@@ -698,7 +706,9 @@ function runDdRegressionTests() {
       'sudo -u root -l git reset --hard',
       'sudo -lU root rm -rf build',
       'sudo -e rm -rf build',
-      'doas -L rm -rf build'
+      'doas -L rm -rf build',
+      'doas -C /tmp/doas.conf rm -rf build',
+      'sudo FOO=1 -l rm -rf build'
     ];
     for (const [commands, expected] of [
       [wrappedRmGitDestructive, ['gateguard.bash-compatible-destructive']],

@@ -514,22 +514,34 @@ const SUDO_VALUE_FLAGS = new Set([
   '--type',
   '-T',
   '--command-timeout',
+  '-R',
+  '--chroot',
+  '-a',
+  '--auth-type',
+  '-c',
+  '--login-class',
 ]);
 
-const DOAS_VALUE_FLAGS = new Set(['-u', '-C']);
-// sudo modes that list, validate, edit or report instead of running the
-// command operand: `sudo -l rm -rf x` only checks whether rm is permitted.
+const DOAS_VALUE_FLAGS = new Set(['-u', '-C', '-a']);
+// Option letters that take no value (sudo's getopt string
+// "+Aa:BbC:c:D:Eeg:Hh::iKklNnPp:R:r:SsT:t:U:u:Vv", doas's "+a:C:Lnsu:").
+const SUDO_BOOLEAN_FLAGS = new Set('ABbEeHiKklNnPSsVv'.split('').map(c => `-${c}`));
+const DOAS_BOOLEAN_FLAGS = new Set(['-L', '-n', '-s']);
+// Modes that list, validate, edit, check config or report instead of running
+// the command operand: `sudo -l rm -rf x` only checks whether rm is permitted.
 const SUDO_NON_EXEC_FLAGS = new Set([
   '-l', '--list', '-v', '--validate', '-K', '--remove-timestamp', '-V', '--version', '-e', '--edit',
 ]);
-const DOAS_NON_EXEC_FLAGS = new Set(['-L']);
+const DOAS_NON_EXEC_FLAGS = new Set(['-L', '-C']);
 
 /**
  * True when a privilege-wrapper option puts it in a mode that does not run the
- * command operand. Short clusters are read left to right and stop at the first
- * value flag, whose value is the rest of the token (`-ul` is user `l`).
+ * command operand. A short cluster is read left to right: a value flag ends it
+ * (the rest is its value, so `-ul` is user `l` and `-R/live` is a chroot), and
+ * an unknown letter ends it too, so an unrecognized option never turns a
+ * command into a non-executing one.
  */
-function isNonExecPrivilegeOption(arg, valueFlags, nonExecFlags) {
+function isNonExecPrivilegeOption(arg, valueFlags, nonExecFlags, booleanFlags) {
   if (arg.startsWith('--')) {
     const separator = arg.indexOf('=');
     return nonExecFlags.has(separator === -1 ? arg : arg.slice(0, separator));
@@ -537,9 +549,15 @@ function isNonExecPrivilegeOption(arg, valueFlags, nonExecFlags) {
   for (let i = 1; i < arg.length; i += 1) {
     const name = `-${arg[i]}`;
     if (nonExecFlags.has(name)) return true;
-    if (valueFlags.has(name)) return false;
+    if (valueFlags.has(name) || !booleanFlags.has(name)) return false;
   }
   return false;
+}
+
+// sudo accepts VAR=value environment assignments between its options
+// (parse_args.c is_envar: not starting with '/' or '=', containing '=').
+function isSudoEnvAssignment(arg) {
+  return arg[0] !== '/' && arg[0] !== '=' && arg.includes('=');
 }
 const EXEC_VALUE_FLAGS = new Set(['-a']);
 const ENV_VALUE_FLAGS = new Set(['-u', '--unset', '-C', '--chdir', '-a', '--argv0', '-S', '--split-string']);
@@ -817,6 +835,7 @@ function unwrapLeadWrappers(tokens, allowShellBuiltins = true, allowDdLaunchers 
     allowAssignments = true;
     const valueFlags = base === 'sudo' ? SUDO_VALUE_FLAGS : DOAS_VALUE_FLAGS;
     const nonExecFlags = base === 'sudo' ? SUDO_NON_EXEC_FLAGS : DOAS_NON_EXEC_FLAGS;
+    const booleanFlags = base === 'sudo' ? SUDO_BOOLEAN_FLAGS : DOAS_BOOLEAN_FLAGS;
     index += 1;
     while (index < argv.length) {
       const flag = argv[index];
@@ -824,8 +843,12 @@ function unwrapLeadWrappers(tokens, allowShellBuiltins = true, allowDdLaunchers 
         index += 1;
         break;
       }
+      if (base === 'sudo' && isSudoEnvAssignment(flag)) {
+        index += 1;
+        continue;
+      }
       if (flag === '-' || !flag.startsWith('-')) break;
-      if (isNonExecPrivilegeOption(flag, valueFlags, nonExecFlags)) return true;
+      if (isNonExecPrivilegeOption(flag, valueFlags, nonExecFlags, booleanFlags)) return true;
       const option = wrapperValueOption(flag, valueFlags);
       index += option && option.value === undefined ? 2 : 1;
     }
