@@ -172,14 +172,10 @@ function run(inputOrRaw, options = {}) {
  */
 function targetPaths(toolInput) {
   const shared = toolInput?.file_path || toolInput?.file || '';
-  const paths = new Set();
-  if (typeof shared === 'string' && shared) paths.add(shared);
   const edits = Array.isArray(toolInput?.edits) ? toolInput.edits : [];
-  for (const edit of edits) {
-    const entryPath = edit && typeof edit === 'object' ? edit.file_path : undefined;
-    if (typeof entryPath === 'string' && entryPath) paths.add(entryPath);
-  }
-  return [...paths];
+  const entryPaths = edits.map(edit => (edit && typeof edit === 'object' ? edit.file_path : undefined));
+  const candidates = [shared, ...entryPaths].filter(p => typeof p === 'string' && p);
+  return [...new Set(candidates)];
 }
 
 function checkTarget(filePath) {
