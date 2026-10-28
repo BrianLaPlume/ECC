@@ -682,7 +682,9 @@ function runDdRegressionTests() {
       'cd repo && sudo rm -rf build',
       "sudo 'rm' -rf build",
       'nohup rm -rf build',
-      'exec git reset --hard'
+      'exec git reset --hard',
+      'sudo -ul rm -rf build',
+      'sudo -k rm -rf build'
     ];
     const wrappedRmGitPassive = [
       'sudo rm build',
@@ -690,7 +692,13 @@ function runDdRegressionTests() {
       'command -v rm',
       'echo sudo rm -rf build',
       'sudo -u rm echo -rf build',
-      "printf '%s' 'env git reset --hard'"
+      "printf '%s' 'env git reset --hard'",
+      'sudo -l rm -rf build',
+      'sudo --list rm -rf build',
+      'sudo -u root -l git reset --hard',
+      'sudo -lU root rm -rf build',
+      'sudo -e rm -rf build',
+      'doas -L rm -rf build'
     ];
     for (const [commands, expected] of [
       [wrappedRmGitDestructive, ['gateguard.bash-compatible-destructive']],

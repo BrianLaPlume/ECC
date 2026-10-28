@@ -517,6 +517,30 @@ const SUDO_VALUE_FLAGS = new Set([
 ]);
 
 const DOAS_VALUE_FLAGS = new Set(['-u', '-C']);
+// sudo modes that list, validate, edit or report instead of running the
+// command operand: `sudo -l rm -rf x` only checks whether rm is permitted.
+const SUDO_NON_EXEC_FLAGS = new Set([
+  '-l', '--list', '-v', '--validate', '-K', '--remove-timestamp', '-V', '--version', '-e', '--edit',
+]);
+const DOAS_NON_EXEC_FLAGS = new Set(['-L']);
+
+/**
+ * True when a privilege-wrapper option puts it in a mode that does not run the
+ * command operand. Short clusters are read left to right and stop at the first
+ * value flag, whose value is the rest of the token (`-ul` is user `l`).
+ */
+function isNonExecPrivilegeOption(arg, valueFlags, nonExecFlags) {
+  if (arg.startsWith('--')) {
+    const separator = arg.indexOf('=');
+    return nonExecFlags.has(separator === -1 ? arg : arg.slice(0, separator));
+  }
+  for (let i = 1; i < arg.length; i += 1) {
+    const name = `-${arg[i]}`;
+    if (nonExecFlags.has(name)) return true;
+    if (valueFlags.has(name)) return false;
+  }
+  return false;
+}
 const EXEC_VALUE_FLAGS = new Set(['-a']);
 const ENV_VALUE_FLAGS = new Set(['-u', '--unset', '-C', '--chdir', '-a', '--argv0', '-S', '--split-string']);
 const SHELL_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
@@ -792,6 +816,7 @@ function unwrapLeadWrappers(tokens, allowShellBuiltins = true, allowDdLaunchers 
     allowShellBuiltins = false;
     allowAssignments = true;
     const valueFlags = base === 'sudo' ? SUDO_VALUE_FLAGS : DOAS_VALUE_FLAGS;
+    const nonExecFlags = base === 'sudo' ? SUDO_NON_EXEC_FLAGS : DOAS_NON_EXEC_FLAGS;
     index += 1;
     while (index < argv.length) {
       const flag = argv[index];
@@ -800,6 +825,7 @@ function unwrapLeadWrappers(tokens, allowShellBuiltins = true, allowDdLaunchers 
         break;
       }
       if (flag === '-' || !flag.startsWith('-')) break;
+      if (isNonExecPrivilegeOption(flag, valueFlags, nonExecFlags)) return true;
       const option = wrapperValueOption(flag, valueFlags);
       index += option && option.value === undefined ? 2 : 1;
     }
